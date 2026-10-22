@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POK-EZ ESPORTS | Registration</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:18px;background:#101010;color:#fff;font-family:Arial,sans-serif}
+main{max-width:760px;margin:auto}h1{color:#00ff88}.muted{color:#bbb}.card{background:#202020;padding:18px;border-radius:14px;margin:16px 0}
+label{display:block;margin:12px 0 5px;color:#ddd}input,select,button{width:100%;padding:13px;margin:5px 0;border-radius:8px;font:inherit}
+input,select{background:#303030;color:#fff;border:1px solid #555}button{background:#00ff88;color:#111;border:0;font-weight:bold}
+.grid{display:grid;grid-template-columns:1fr;gap:8px}@media(min-width:620px){.grid{grid-template-columns:1fr 1fr}}
+.item{border:1px solid #444;border-radius:10px;padding:12px;margin:10px 0}.msg{white-space:pre-wrap;overflow-wrap:anywhere}.success{color:#00ff88}.error{color:#ff8c8c}
+.note{font-size:14px;line-height:1.5;color:#bbb}
+</style></head><body><main>
+<h1>POK-EZ ESPORTS</h1><p class="muted">Register your squad for a tournament</p>
+<section class="card"><h2>Available Tournaments</h2><div id="list" class="muted">Loading tournaments...</div></section>
+<section class="card"><h2>Squad Registration</h2>
+<p class="note">Enter your team details and game UIDs only. Never enter your game-account password.</p>
+<form id="form">
+<label for="tournament">Choose tournament</label><select id="tournament" required><option value="">Loading...</option></select>
+<label for="team">Team name</label><input id="team" maxlength="50" required>
+<div class="grid"><div><label for="leader">Leader name</label><input id="leader" maxlength="50" required></div>
+<div><label for="leaderUid">Leader Free Fire UID</label><input id="leaderUid" inputmode="numeric" maxlength="30" required></div></div>
+<h3>Squad members (4 players)</h3>
+<div class="grid">
+<div><label for="p1name">Player 1 name</label><input id="p1name" maxlength="50" required></div><div><label for="p1uid">Player 1 UID</label><input id="p1uid" inputmode="numeric" maxlength="30" required></div>
+<div><label for="p2name">Player 2 name</label><input id="p2name" maxlength="50" required></div><div><label for="p2uid">Player 2 UID</label><input id="p2uid" inputmode="numeric" maxlength="30" required></div>
+<div><label for="p3name">Player 3 name</label><input id="p3name" maxlength="50" required></div><div><label for="p3uid">Player 3 UID</label><input id="p3uid" inputmode="numeric" maxlength="30" required></div>
+<div><label for="p4name">Player 4 name</label><input id="p4name" maxlength="50" required></div><div><label for="p4uid">Player 4 UID</label><input id="p4uid" inputmode="numeric" maxlength="30" required></div>
+</div><button id="submit" type="submit">Submit Registration</button></form><p id="msg" class="msg muted" role="status"></p>
+</section></main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getFirestore,collection,getDocs,addDoc,serverTimestamp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+const firebaseConfig={
+ apiKey:"AIzaSyCuhOdTKGNeX0YJ5DrIPzXGMFKk1NwGQ68",
+ authDomain:"pok-ez-esports-e0855.firebaseapp.com",
+ projectId:"pok-ez-esports-e0855",
+ storageBucket:"pok-ez-esports-e0855.firebasestorage.app",
+ messagingSenderId:"349529011824",
+ appId:"1:349529011824:web:d1827988cbd0925891e6b5",
+ measurementId:"G-89513C6MZK"
+};
+const db=getFirestore(initializeApp(firebaseConfig)), $=id=>document.getElementById(id);
+let tournaments=[];
+function message(text,type="muted"){$("msg").textContent=text;$("msg").className="msg "+type}
+function friendly(e){if(e?.code==="permission-denied")return "Firestore permission denied. Apply the supplied Firestore Rules file first.";return (e?.message||"Unknown error")+" "+(e?.code||"")}
+async function load(){
+ try{
+  const snap=await getDocs(collection(db,"publicTournaments"));
+  tournaments=snap.docs.map(d=>({id:d.id,...d.data()}));
+  const sel=$("tournament");sel.replaceChildren(new Option(tournaments.length?"Select a tournament":"No tournaments available",""));
+  $("list").replaceChildren();
+  if(!tournaments.length){$("list").textContent="No tournaments available yet.";return}
+  for(const t of tournaments){
+   sel.add(new Option(`${t.name||"Tournament"} — ${t.mode||"Mode not set"}`,t.id));
+   const card=document.createElement("div");card.className="item";
+   const h=document.createElement("h3");h.textContent=t.name||"Tournament";
+   const p=document.createElement("p");p.textContent=`Mode: ${t.mode||"-"} | Slots: ${t.filledSlots||0}/${t.totalSlots||0}`;
+   const date=document.createElement("p");date.className="muted";date.textContent=t.scheduledAt?`Scheduled: ${t.scheduledAt}`:"Schedule to be announced";
+   card.append(h,p,date);$("list").append(card);
+  }
+ }catch(e){$("list").textContent="Could not load tournaments. Firestore Rules must allow public tournament reads."; $("tournament").replaceChildren(new Option("Could not load tournaments",""));message(friendly(e),"error")}
+}
+$("form").addEventListener("submit",async ev=>{
+ ev.preventDefault();const tId=$("tournament").value,t=tournaments.find(x=>x.id===tId);
+ if(!t){message("Please select a tournament.","error");return}
+ const team=$("team").value.trim(),leader=$("leader").value.trim(),leaderUid=$("leaderUid").value.trim();
+ const players=[1,2,3,4].map(i=>({name:$("p"+i+"name").value.trim(),uid:$("p"+i+"uid").value.trim()}));
+ if(!team||!leader||!leaderUid||players.some(p=>!p.name||!p.uid)){message("Please fill in every required field.","error");return}
+ if(!/^[0-9]{5,30}$/.test(leaderUid)||players.some(p=>!/^[0-9]{5,30}$/.test(p.uid))){message("Game UIDs must contain 5–30 digits only.","error");return}
+ const b=$("submit");b.disabled=true;b.textContent="Submitting...";
+ try{
+  await addDoc(collection(db,"registrations"),{
+   team,leader,leaderUid,tournamentId:tId,tournamentName:String(t.name||"Tournament"),
+   player1Name:players[0].name,player1Uid:players[0].uid,
+   player2Name:players[1].name,player2Uid:players[1].uid,
+   player3Name:players[2].name,player3Uid:players[2].uid,
+   player4Name:players[3].name,player4Uid:players[3].uid,
+   status:"pending",createdAt:serverTimestamp()
+  });
+  $("form").reset();message("Registration submitted! It is pending admin confirmation.","success");
+ }catch(e){message("Registration failed: "+friendly(e),"error")}
+ finally{b.disabled=false;b.textContent="Submit Registration"}
+});
+load();
+</script></body></html>
